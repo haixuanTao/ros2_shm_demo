@@ -9,8 +9,6 @@
 #
 # A generic char array allows passing arbitrary data.
 #
-char[256] data
-uint8 size
-uint64 counter
+char[8] data
 
-uint8 MAX_SIZE=255
+# uint8 MAX_SIZE=255

@@ -16,7 +16,7 @@
 
 #include "iceoryx_posh/popo/untyped_subscriber.hpp"
 #include "iceoryx_posh/runtime/posh_runtime.hpp"
-#include "iceoryx_utils/posix_wrapper/signal_handler.hpp"
+#include "iceoryx_hoofs/posix_wrapper/signal_handler.hpp"
 
 #include <iostream>
 
@@ -29,72 +29,61 @@
 constexpr uint32_t DDS_IOX_HEADER_SIZE = 56;
 using ROSTopic = ros2_shm_demo::msg::ShmTopic;
 
-bool shutdown = false;
+// bool shutdown = false;
 constexpr char APP_NAME[] = "iox-ros2-subscriber";
 
-static void sigHandler(int) {
-  // caught SIGINT or SIGTERM, now exit gracefully
-  shutdown = true;
+static void sigHandler(int)
+{
+    // caught SIGINT or SIGTERM, now exit gracefully
+    // shutdown = true;
 }
 
-int main() {
-  // register sigHandler
-  auto signalIntGuard =
-      iox::posix::registerSignalHandler(iox::posix::Signal::INT, sigHandler);
-  auto signalTermGuard =
-      iox::posix::registerSignalHandler(iox::posix::Signal::TERM, sigHandler);
+int main()
+{
+    // register sigHandler
+    auto signalIntGuard =
+        iox::posix::registerSignalHandler(iox::posix::Signal::INT, sigHandler);
+    auto signalTermGuard =
+        iox::posix::registerSignalHandler(iox::posix::Signal::TERM, sigHandler);
 
-  // initialize runtime
-  iox::runtime::PoshRuntime::initRuntime(APP_NAME);
+    // initialize runtime
+    iox::runtime::PoshRuntime::initRuntime(APP_NAME);
 
-  // initialize subscriber
-  // we know how the services are mapped to dds
-  // note that we can use the introspection to get this info
-  // Note: If not for the internal header C<cloneDDS uses, we could use a
-  // subscriber with type ROSTopic here.
-  iox::popo::UntypedSubscriber subscriber(
-      {"DDS_CYCLONE", "ros2_shm_demo::msg::dds_::ShmTopic_", "rt/chatter"});
+    // initialize subscriber
+    // we know how the services are mapped to dds
+    // note that we can use the introspection to get this info
+    // Note: If not for the internal header C<cloneDDS uses, we could use a
+    // subscriber with type ROSTopic here.
+    iox::popo::UntypedSubscriber subscriber(
+        {"DDS_CYCLONE", "ros2_shm_demo::msg::dds_::ShmTopic_", "rt/chatter"});
 
-  auto state = subscriber.getSubscriptionState();
+    auto state = subscriber.getSubscriptionState();
 
-  if (state == iox::SubscribeState::SUBSCRIBED) {
-    std::cout << "iox subscriber: Subscribed to "
-                 "ros2_shm_demo::msg::dds_::ShmTopic_ rt/chatter"
-              << std::endl;
-  }
+    if (state == iox::SubscribeState::SUBSCRIBED)
+    {
+        std::cout << "iox subscriber: Subscribed to "
+                     "ros2_shm_demo::msg::dds_::ShmTopic_ rt/chatter"
+                  << std::endl;
+    }
 
-  while (!shutdown) {
-    subscriber.take()
-        .and_then([&](const void *payload) {
-          // this is very brittle and only to show that iceoryx can eavesdrop on
-          // CycloneDDS if Shared Memory is used
-          auto *payloadWithoutDDSHeader =
-              reinterpret_cast<const uint8_t *>(payload) + DDS_IOX_HEADER_SIZE;
-
-          // we account for the header CycloneDDS currently prepends before the
-          // actual ROS sample
-          const ROSTopic *sample =
-              reinterpret_cast<const ROSTopic *>(payloadWithoutDDSHeader);
-          auto data = reinterpret_cast<const char *>(sample->data.data());
-
-          std::cout << "iox subscriber: Received " << data << " "
-                    << sample->counter << std::endl;
-
-          subscriber.release(payload);
-        })
-        .or_else([](auto &result) {
+    while (!shutdown)
+    {
+        subscriber.take()
+            .and_then([&](const void *payload)
+                      { subscriber.release(payload); })
+            .or_else([](auto &result)
+                     {
           // only has to be called if the alternative is of
           // interest, i.e. if nothing has to happen when no data
           // is received and a possible error alternative is not
           // checked or_else is not needed
           if (result != iox::popo::ChunkReceiveResult::NO_CHUNK_AVAILABLE) {
             std::cout << "Error receiving chunk." << std::endl;
-          }
-        });
+          } });
 
-    // use polling for simplicity
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-  }
+        // use polling for simplicity
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
 
-  return (EXIT_SUCCESS);
+    return (EXIT_SUCCESS);
 }

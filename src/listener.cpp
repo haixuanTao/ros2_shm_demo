@@ -14,47 +14,62 @@
 
 #include <cstring>
 #include <memory>
+#include <chrono>
 
 #include "rclcpp/rclcpp.hpp"
 
 #include "ros2_shm_demo/msg/shm_topic.hpp"
 
-class Listener : public rclcpp::Node {
+class Listener : public rclcpp::Node
+{
 private:
-  using Topic = ros2_shm_demo::msg::ShmTopic;
+    using Topic = ros2_shm_demo::msg::ShmTopic;
 
 public:
-  explicit Listener(const rclcpp::NodeOptions &options)
-      : Node("shm_demo_listener", options) {
+    explicit Listener(const rclcpp::NodeOptions &options)
+        : Node("shm_demo_listener", options)
+    {
 
-    // subscription callback to process arriving data
-    auto callback = [this](const Topic::SharedPtr msg) -> void {
-      // Read the message and perform operations accordingly.
-      // Here we copy the data and display it.
+        // subscription callback to process arriving data
+        auto callback = [this](const Topic::SharedPtr msg) -> void
+        {
+            // Read the message and perform operations accordingly.
+            // Here we copy the data and display it.
 
-      std::memcpy(m_lastData, msg->data.data(), msg->size);
-      m_lastData[Topic::MAX_SIZE] =
-          '\0'; // in case there was no zero termination
+            // Assuming you have a byte array representing the time point
+            auto end = std::chrono::high_resolution_clock::now();
 
-      RCLCPP_INFO(this->get_logger(), "Received %s %lu", m_lastData,
-                  msg->counter);
-    };
+            // Copy the byte array with the memory representation of the time point
+            // Note: Here, you would have the actual byte array obtained from a previous step
 
-    rclcpp::QoS qos(rclcpp::KeepLast(10));
-    m_subscription = create_subscription<Topic>("chatter", qos, callback);
-  }
+            // Initialize a time_point object to store the converted value
+            std::chrono::high_resolution_clock::time_point convertedTimePoint;
+            std::memcpy(&convertedTimePoint, msg->data.data(), sizeof(convertedTimePoint));
+            // Calculate the duration
+            std::chrono::duration<double> duration = end - convertedTimePoint;
+            double elapsedmilliSeconds = duration.count() * 1000;
+            last_duration += elapsedmilliSeconds / 100;
+
+            // Print the elapsed time
+            // std::cout << "Elapsed time: " << elapsedSeconds << " seconds" << std::endl;
+            RCLCPP_INFO(this->get_logger(), "Received %li %f %f", msg->data.size(), elapsedmilliSeconds, last_duration);
+        };
+
+        rclcpp::QoS qos(rclcpp::KeepLast(10));
+        m_subscription = create_subscription<Topic>("chatter", qos, callback);
+    }
 
 private:
-  rclcpp::Subscription<Topic>::SharedPtr m_subscription;
-
-  char m_lastData[256];
+    rclcpp::Subscription<Topic>::SharedPtr m_subscription;
+    double last_duration;
 };
 
-int main(int argc, char *argv[]) {
-  rclcpp::init(argc, argv);
-  rclcpp::NodeOptions options;
-  rclcpp::spin(std::make_shared<Listener>(options));
-  rclcpp::shutdown();
+int main(int argc, char *argv[])
+{
+    rclcpp::init(argc, argv);
+    rclcpp::NodeOptions options;
+    rclcpp::spin(std::make_shared<Listener>(options));
+    rclcpp::shutdown();
 
-  return 0;
+    return 0;
 }
